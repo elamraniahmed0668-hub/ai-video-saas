@@ -7,6 +7,8 @@ interface Scene {
   voiceover: string;
   visual: string;
   imageUrl?: string;
+  audioUrl?: string;
+  loadingAudio?: boolean;
 }
 
 interface Script {
@@ -69,6 +71,48 @@ export default function Home() {
 
     setScript({ ...script, scenes: updatedScenes });
     setLoadingImages(false);
+  };
+
+  const handleGenerateAudio = async (sceneId: number) => {
+    if (!script) return;
+
+    // ضع حالة loading على المشهد المحدد
+    setScript((prev) => ({
+      ...prev!,
+      scenes: prev!.scenes.map((s) =>
+        s.id === sceneId ? { ...s, loadingAudio: true } : s
+      ),
+    }));
+
+    const scene = script.scenes.find((s) => s.id === sceneId);
+    if (!scene) return;
+
+    try {
+      const res = await fetch("/api/generate-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: scene.voiceover }),
+      });
+
+      if (!res.ok) throw new Error("فشل توليد الصوت");
+
+      const blob = await res.blob();
+      const audioUrl = URL.createObjectURL(blob);
+
+      setScript((prev) => ({
+        ...prev!,
+        scenes: prev!.scenes.map((s) =>
+          s.id === sceneId ? { ...s, audioUrl, loadingAudio: false } : s
+        ),
+      }));
+    } catch {
+      setScript((prev) => ({
+        ...prev!,
+        scenes: prev!.scenes.map((s) =>
+          s.id === sceneId ? { ...s, loadingAudio: false } : s
+        ),
+      }));
+    }
   };
 
   return (
@@ -166,9 +210,26 @@ export default function Home() {
                   <p className="text-white text-right leading-relaxed mb-3" dir="rtl">
                     {scene.voiceover}
                   </p>
-                  <p className="text-gray-500 text-sm italic">
+                  <p className="text-gray-500 text-sm italic mb-4">
                     🎥 {scene.visual}
                   </p>
+
+                  {/* Audio Section */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleGenerateAudio(scene.id)}
+                      disabled={scene.loadingAudio}
+                      className="bg-green-600/20 hover:bg-green-600/40 border border-green-500/30 disabled:opacity-50 transition-all duration-200 text-green-400 text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
+                    >
+                      <span>{scene.loadingAudio ? "⏳" : "🎙️"}</span>
+                      <span>{scene.loadingAudio ? "جارٍ التوليد..." : "ولّد الصوت"}</span>
+                    </button>
+
+                    {/* Audio Player */}
+                    {scene.audioUrl && (
+                      <audio controls src={scene.audioUrl} className="flex-1 h-9" />
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
