@@ -1,31 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { InferenceClient } from "@huggingface/inference";
-
-const client = new InferenceClient(process.env.HUGGINGFACE_TOKEN);
 
 export async function POST(req: NextRequest) {
   try {
     const { visual } = await req.json();
 
-    const imageBlob = await client.textToImage({
-      model: "black-forest-labs/FLUX.1-schnell",
-      inputs: `${visual}, cinematic, professional photography, high quality, 4k`,
-      parameters: {
-        num_inference_steps: 4,
-        width: 1024,
-        height: 576,
-      },
+    const encodedPrompt = encodeURIComponent(
+      `${visual}, cinematic, professional photography, high quality, 4k`
+    );
+
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=576&nologo=true&enhance=true&seed=${Date.now()}`;
+
+    const response = await fetch(pollinationsUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
     });
 
-    const buffer = Buffer.from(await imageBlob.arrayBuffer());
-    const base64 = buffer.toString("base64");
-    const imageUrl = `data:image/png;base64,${base64}`;
+    if (!response.ok) {
+      return NextResponse.json(
+        { success: false, error: "فشل توليد الصورة" },
+        { status: 500 }
+      );
+    }
+
+    const imageBuffer = await response.arrayBuffer();
+    const base64 = Buffer.from(imageBuffer).toString("base64");
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    const imageUrl = `data:${contentType};base64,${base64}`;
 
     return NextResponse.json({ success: true, imageUrl });
-  } catch (error: any) {
-    console.error("HF Error:", error?.message || error);
+  } catch (error) {
+    console.error(error);
     return NextResponse.json(
-      { success: false, error: error?.message || "حدث خطأ" },
+      { success: false, error: "حدث خطأ" },
       { status: 500 }
     );
   }
